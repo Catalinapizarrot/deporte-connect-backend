@@ -1,17 +1,20 @@
 package com.deporteconnect.service;
 
 import com.deporteconnect.dto.request.CreateActivityRequest;
+import com.deporteconnect.dto.request.CreateActivityReportRequest;
 import com.deporteconnect.dto.response.ActivityResponse;
 import com.deporteconnect.exception.BusinessException;
 import com.deporteconnect.exception.ResourceNotFoundException;
 import com.deporteconnect.model.Activity;
 import com.deporteconnect.model.ActivityGender;
+import com.deporteconnect.model.ActivityReport;
 import com.deporteconnect.model.ActivityStatus;
 import com.deporteconnect.model.Gender;
 import com.deporteconnect.model.Location;
 import com.deporteconnect.model.Participation;
 import com.deporteconnect.model.Sport;
 import com.deporteconnect.model.User;
+import com.deporteconnect.repository.ActivityReportRepository;
 import com.deporteconnect.repository.ActivityRepository;
 import com.deporteconnect.repository.LocationRepository;
 import com.deporteconnect.repository.ParticipationRepository;
@@ -21,7 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.Period;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -30,6 +35,7 @@ import java.util.stream.Collectors;
 public class ActivityService {
 
     private final ActivityRepository activityRepository;
+    private final ActivityReportRepository activityReportRepository;
     private final SportRepository sportRepository;
     private final LocationRepository locationRepository;
     private final ParticipationRepository participationRepository;
@@ -66,6 +72,18 @@ public class ActivityService {
 
     @Transactional
     public ActivityResponse create(User currentUser, CreateActivityRequest request) {
+        if (!Boolean.TRUE.equals(currentUser.getProfileComplete())) {
+            throw new BusinessException("Debes completar tu perfil antes de crear actividades");
+        }
+        if (currentUser.getPhone() == null || currentUser.getPhone().isBlank()) {
+            throw new BusinessException("Debes registrar un telefono antes de crear actividades");
+        }
+        if (currentUser.getBirthDate() == null) {
+            throw new BusinessException("Debes registrar tu fecha de nacimiento antes de crear actividades");
+        }
+        if (Period.between(currentUser.getBirthDate(), LocalDate.now()).getYears() < 18) {
+            throw new BusinessException("Debes ser mayor de 18 anos para crear actividades");
+        }
         if (currentUser.getGender() == null) {
             throw new BusinessException("Debes completar tu perfil con tu gÃ©nero antes de crear actividades");
         }
@@ -167,6 +185,33 @@ public class ActivityService {
 
         activity.setStatus(ActivityStatus.CANCELLED);
         activityRepository.save(activity);
+    }
+
+    @Transactional
+    public void reportActivity(User currentUser, Long activityId, CreateActivityReportRequest request) {
+        if (currentUser == null || currentUser.getId() == null) {
+            throw new BusinessException("Debes iniciar sesion para reportar una actividad");
+        }
+        if (!Boolean.TRUE.equals(currentUser.getProfileComplete())) {
+            throw new BusinessException("Debes completar tu perfil antes de reportar actividades");
+        }
+
+        Activity activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new ResourceNotFoundException("Actividad no encontrada"));
+
+        if (activityReportRepository.existsByReporterIdAndActivityId(currentUser.getId(), activityId)) {
+            throw new BusinessException("Ya reportaste esta actividad");
+        }
+
+        ActivityReport report = ActivityReport.builder()
+                .activity(activity)
+                .reporter(currentUser)
+                .reason(request.getReason().trim())
+                .description(request.getDescription() == null ? null : request.getDescription().trim())
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        activityReportRepository.save(report);
     }
 
     // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

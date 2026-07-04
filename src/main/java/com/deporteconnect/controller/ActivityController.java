@@ -1,6 +1,7 @@
 package com.deporteconnect.controller;
 
 import com.deporteconnect.dto.request.CreateActivityRequest;
+import com.deporteconnect.dto.request.CreateActivityReportRequest;
 import com.deporteconnect.dto.response.ActivityResponse;
 import com.deporteconnect.model.User;
 import com.deporteconnect.service.ActivityService;
@@ -56,6 +57,17 @@ public class ActivityController {
             @PathVariable Long id
     ) {
         return ResponseEntity.ok(activityService.joinActivity(currentUser, id));
+    }
+
+    @PostMapping("/{id}/reportes")
+    @Operation(summary = "Reportar una actividad sospechosa")
+    public ResponseEntity<Void> report(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody CreateActivityReportRequest request
+    ) {
+        activityService.reportActivity(currentUser, id, request);
+        return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/{id}/salirse")
