@@ -79,6 +79,14 @@ public class User {
     @Builder.Default
     private Integer participantRatingCount = 0;
 
+    @Column(name = "organizer_rating", precision = 2, scale = 1)
+    @Builder.Default
+    private BigDecimal organizerRating = BigDecimal.ZERO;
+
+    @Column(name = "organizer_rating_count")
+    @Builder.Default
+    private Integer organizerRatingCount = 0;
+
     @Column(name = "created_at")
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

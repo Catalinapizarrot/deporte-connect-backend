@@ -2,6 +2,7 @@ package com.deporteconnect.service;
 
 import com.deporteconnect.dto.request.CreateActivityRequest;
 import com.deporteconnect.dto.request.CreateActivityReportRequest;
+import com.deporteconnect.dto.request.CreateOrganizerRatingRequest;
 import com.deporteconnect.dto.response.ActivityResponse;
 import com.deporteconnect.exception.BusinessException;
 import com.deporteconnect.exception.ResourceNotFoundException;
@@ -11,19 +12,23 @@ import com.deporteconnect.model.ActivityReport;
 import com.deporteconnect.model.ActivityStatus;
 import com.deporteconnect.model.Gender;
 import com.deporteconnect.model.Location;
+import com.deporteconnect.model.OrganizerRating;
 import com.deporteconnect.model.Participation;
 import com.deporteconnect.model.Sport;
 import com.deporteconnect.model.User;
 import com.deporteconnect.repository.ActivityReportRepository;
 import com.deporteconnect.repository.ActivityRepository;
 import com.deporteconnect.repository.LocationRepository;
+import com.deporteconnect.repository.OrganizerRatingRepository;
 import com.deporteconnect.repository.ParticipationRepository;
 import com.deporteconnect.repository.SportRepository;
+import com.deporteconnect.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
@@ -41,6 +46,8 @@ public class ActivityService {
     private final SportRepository sportRepository;
     private final LocationRepository locationRepository;
     private final ParticipationRepository participationRepository;
+    private final OrganizerRatingRepository organizerRatingRepository;
+    private final UserRepository userRepository;
 
     /** Feed de actividades disponibles (no canceladas, futuras), filtrado por gÃ©nero */
     @Transactional(readOnly = true)
@@ -187,6 +194,81 @@ public class ActivityService {
 
         activity.setStatus(ActivityStatus.CANCELLED);
         activityRepository.save(activity);
+    }
+
+    @Transactional
+    public ActivityResponse finishActivity(User currentUser, Long activityId) {
+        Activity activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new ResourceNotFoundException("Actividad no encontrada"));
+
+        if (!activity.getOrganizer().getId().equals(currentUser.getId())) {
+            throw new BusinessException("Solo el organizador puede finalizar la actividad");
+        }
+        if (activity.getStatus() != ActivityStatus.OPEN) {
+            throw new BusinessException("Solo se pueden finalizar actividades abiertas");
+        }
+        if (activity.getEventAt().isAfter(LocalDateTime.now())) {
+            throw new BusinessException("Solo se puede finalizar una actividad cuando su fecha ya paso");
+        }
+
+        activity.setStatus(ActivityStatus.FINISHED);
+        activity = activityRepository.save(activity);
+        return loadAndConvert(activity);
+    }
+
+    @Transactional
+    public ActivityResponse rateOrganizer(User currentUser, Long activityId, CreateOrganizerRatingRequest request) {
+        Activity activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new ResourceNotFoundException("Actividad no encontrada"));
+
+        User organizer = activity.getOrganizer();
+        if (activity.getStatus() != ActivityStatus.FINISHED) {
+            throw new BusinessException("Solo puedes calificar actividades finalizadas");
+        }
+        if (organizer.getId().equals(currentUser.getId())) {
+            throw new BusinessException("No puedes calificarte a ti mismo como organizador");
+        }
+
+        Participation participation = participationRepository
+                .findByUserIdAndActivityId(currentUser.getId(), activityId)
+                .orElseThrow(() -> new BusinessException("Solo los participantes pueden calificar al organizador"));
+
+        if (participation.getRole() != Participation.Role.PARTICIPANTE) {
+            throw new BusinessException("Solo los participantes pueden calificar al organizador");
+        }
+        if (participation.getStatus() != Participation.Status.INSCRITO) {
+            throw new BusinessException("Solo participantes inscritos pueden calificar al organizador");
+        }
+        if (organizerRatingRepository.existsByActivityIdAndRaterId(activityId, currentUser.getId())) {
+            throw new BusinessException("Ya calificaste al organizador de esta actividad");
+        }
+
+        OrganizerRating rating = OrganizerRating.builder()
+                .activity(activity)
+                .organizer(organizer)
+                .rater(currentUser)
+                .stars(request.getStars())
+                .createdAt(LocalDateTime.now())
+                .build();
+        organizerRatingRepository.save(rating);
+
+        BigDecimal currentAverage = organizer.getOrganizerRating() == null
+                ? BigDecimal.ZERO
+                : organizer.getOrganizerRating();
+        int currentCount = organizer.getOrganizerRatingCount() == null
+                ? 0
+                : organizer.getOrganizerRatingCount();
+        int newCount = currentCount + 1;
+        BigDecimal newAverage = currentAverage
+                .multiply(BigDecimal.valueOf(currentCount))
+                .add(BigDecimal.valueOf(request.getStars()))
+                .divide(BigDecimal.valueOf(newCount), 1, RoundingMode.HALF_UP);
+
+        organizer.setOrganizerRating(newAverage);
+        organizer.setOrganizerRatingCount(newCount);
+        userRepository.save(organizer);
+
+        return loadAndConvert(activity);
     }
 
     @Transactional

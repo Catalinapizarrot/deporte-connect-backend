@@ -22,6 +22,8 @@ public class ActivityResponse {
     private Long organizerId;
     private String organizerName;
     private Boolean organizerVerified;
+    private BigDecimal organizerRating;
+    private Integer organizerRatingCount;
     private LocalDateTime eventAt;
     private Integer maxParticipants;
     private Integer currentParticipants;
@@ -41,6 +43,12 @@ public class ActivityResponse {
                 .organizerId(a.getOrganizer().getId())
                 .organizerName(a.getOrganizer().getFullName())
                 .organizerVerified(isOrganizerVerified(a))
+                .organizerRating(a.getOrganizer().getOrganizerRating() == null
+                        ? BigDecimal.ZERO
+                        : a.getOrganizer().getOrganizerRating())
+                .organizerRatingCount(a.getOrganizer().getOrganizerRatingCount() == null
+                        ? 0
+                        : a.getOrganizer().getOrganizerRatingCount())
                 .eventAt(a.getEventAt())
                 .maxParticipants(a.getMaxParticipants())
                 .currentParticipants(a.getCurrentParticipants())

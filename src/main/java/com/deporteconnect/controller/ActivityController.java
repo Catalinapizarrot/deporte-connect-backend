@@ -2,6 +2,7 @@ package com.deporteconnect.controller;
 
 import com.deporteconnect.dto.request.CreateActivityRequest;
 import com.deporteconnect.dto.request.CreateActivityReportRequest;
+import com.deporteconnect.dto.request.CreateOrganizerRatingRequest;
 import com.deporteconnect.dto.response.ActivityResponse;
 import com.deporteconnect.model.User;
 import com.deporteconnect.service.ActivityService;
@@ -68,6 +69,25 @@ public class ActivityController {
     ) {
         activityService.reportActivity(currentUser, id, request);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/finalizar")
+    @Operation(summary = "Finalizar actividad (solo organizador)")
+    public ResponseEntity<ActivityResponse> finish(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(activityService.finishActivity(currentUser, id));
+    }
+
+    @PostMapping("/{id}/calificacion-organizador")
+    @Operation(summary = "Calificar al organizador de una actividad finalizada")
+    public ResponseEntity<ActivityResponse> rateOrganizer(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long id,
+            @Valid @RequestBody CreateOrganizerRatingRequest request
+    ) {
+        return ResponseEntity.ok(activityService.rateOrganizer(currentUser, id, request));
     }
 
     @DeleteMapping("/{id}/salirse")
