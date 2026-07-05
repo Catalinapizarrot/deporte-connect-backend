@@ -10,6 +10,7 @@ package com.deporteconnect.model;
 public enum ActivityStatus {
     OPEN,
     FULL,
+    UNDER_REVIEW,
     CANCELLED,
     FINISHED
 }

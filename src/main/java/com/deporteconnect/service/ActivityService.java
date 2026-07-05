@@ -34,6 +34,8 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ActivityService {
 
+    private static final long REPORTS_UNDER_REVIEW_THRESHOLD = 3;
+
     private final ActivityRepository activityRepository;
     private final ActivityReportRepository activityReportRepository;
     private final SportRepository sportRepository;
@@ -212,6 +214,12 @@ public class ActivityService {
                 .build();
 
         activityReportRepository.save(report);
+
+        long reportCount = activityReportRepository.countDistinctByActivityId(activityId);
+        if (reportCount >= REPORTS_UNDER_REVIEW_THRESHOLD && activity.getStatus() == ActivityStatus.OPEN) {
+            activity.setStatus(ActivityStatus.UNDER_REVIEW);
+            activityRepository.save(activity);
+        }
     }
 
     // â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
