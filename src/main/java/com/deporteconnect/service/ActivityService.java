@@ -24,6 +24,7 @@ import com.deporteconnect.repository.ParticipationRepository;
 import com.deporteconnect.repository.SportRepository;
 import com.deporteconnect.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,6 +39,7 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ActivityService {
 
     private static final long REPORTS_UNDER_REVIEW_THRESHOLD = 3;
@@ -49,6 +51,7 @@ public class ActivityService {
     private final ParticipationRepository participationRepository;
     private final OrganizerRatingRepository organizerRatingRepository;
     private final UserRepository userRepository;
+    private final EmailService emailService;
 
     /** Feed de actividades disponibles (no canceladas, futuras), filtrado por gÃ©nero */
     @Transactional(readOnly = true)
@@ -297,11 +300,27 @@ public class ActivityService {
                 .build();
 
         activityReportRepository.save(report);
+        log.info(
+                "Reporte guardado: activityId={}, reporterId={}, organizerEmail={}, reason={}",
+                activityId,
+                currentUser.getId(),
+                activity.getOrganizer() == null ? null : activity.getOrganizer().getEmail(),
+                report.getReason()
+        );
 
         long reportCount = activityReportRepository.countDistinctByActivityId(activityId);
+        log.info("Invocando EmailService.notifyInstitutionalActivityReport: activityId={}, reportCount={}", activityId, reportCount);
+        emailService.notifyInstitutionalActivityReport(activity, report);
+
+        log.info("Invocando EmailService.notifyActivityReported: activityId={}, reportCount={}", activityId, reportCount);
+        emailService.notifyActivityReported(activity, report, reportCount);
+
         if (reportCount >= REPORTS_UNDER_REVIEW_THRESHOLD && activity.getStatus() == ActivityStatus.OPEN) {
             activity.setStatus(ActivityStatus.UNDER_REVIEW);
             activityRepository.save(activity);
+            log.info("Actividad pasa a UNDER_REVIEW: activityId={}, reportCount={}", activityId, reportCount);
+            log.info("Invocando EmailService.notifyActivityUnderReview: activityId={}, reportCount={}", activityId, reportCount);
+            emailService.notifyActivityUnderReview(activity, reportCount);
         }
     }
 
