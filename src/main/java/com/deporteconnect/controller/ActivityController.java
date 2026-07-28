@@ -38,8 +38,11 @@ public class ActivityController {
 
     @GetMapping("/{id}")
     @Operation(summary = "Detalle de una actividad")
-    public ResponseEntity<ActivityResponse> getById(@PathVariable Long id) {
-        return ResponseEntity.ok(activityService.getById(id));
+    public ResponseEntity<ActivityResponse> getById(
+            @AuthenticationPrincipal User currentUser,
+            @PathVariable Long id
+    ) {
+        return ResponseEntity.ok(activityService.getById(currentUser, id));
     }
 
     @PostMapping

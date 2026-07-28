@@ -33,6 +33,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
@@ -56,10 +57,10 @@ public class ActivityService {
                 ActivityStatus.OPEN, LocalDateTime.now()
         );
 
-        Gender userGender = currentUser.getGender();
+        Gender userGender = currentUser == null ? null : currentUser.getGender();
         return activities.stream()
                 .filter(a -> isGenderCompatible(a.getGender(), userGender))
-                .map(this::loadAndConvert)
+                .map(a -> loadAndConvert(a, currentUser))
                 .collect(Collectors.toList());
     }
 
@@ -68,15 +69,15 @@ public class ActivityService {
     public List<ActivityResponse> getMyMatches(User currentUser) {
         List<Activity> activities = activityRepository.findMyActivities(currentUser.getId());
         return activities.stream()
-                .map(this::loadAndConvert)
+                .map(a -> loadAndConvert(a, currentUser))
                 .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
-    public ActivityResponse getById(Long id) {
+    public ActivityResponse getById(User currentUser, Long id) {
         Activity a = activityRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Actividad no encontrada: " + id));
-        return loadAndConvert(a);
+        return loadAndConvert(a, currentUser);
     }
 
     @Transactional
@@ -129,7 +130,7 @@ public class ActivityService {
                 .build();
         participationRepository.save(p);
 
-        return loadAndConvert(activityRepository.findById(activity.getId()).orElseThrow());
+        return loadAndConvert(activityRepository.findById(activity.getId()).orElseThrow(), currentUser);
     }
 
     @Transactional
@@ -164,7 +165,7 @@ public class ActivityService {
                 .build();
         participationRepository.save(p);
 
-        return loadAndConvert(activityRepository.findById(activityId).orElseThrow());
+        return loadAndConvert(activityRepository.findById(activityId).orElseThrow(), currentUser);
     }
 
     @Transactional
@@ -213,7 +214,7 @@ public class ActivityService {
 
         activity.setStatus(ActivityStatus.FINISHED);
         activity = activityRepository.save(activity);
-        return loadAndConvert(activity);
+        return loadAndConvert(activity, currentUser);
     }
 
     @Transactional
@@ -268,7 +269,7 @@ public class ActivityService {
         organizer.setOrganizerRatingCount(newCount);
         userRepository.save(organizer);
 
-        return loadAndConvert(activity);
+        return loadAndConvert(activity, currentUser);
     }
 
     @Transactional
@@ -320,11 +321,49 @@ public class ActivityService {
         return false;
     }
 
-    private ActivityResponse loadAndConvert(Activity a) {
+    private ActivityResponse loadAndConvert(Activity a, User currentUser) {
         a.getSport().getName();
         a.getLocation().getName();
         a.getOrganizer().getFullName();
         a.getCurrentParticipants();
-        return ActivityResponse.from(a);
+
+        if (currentUser == null || currentUser.getId() == null) {
+            return ActivityResponse.from(a);
+        }
+
+        Optional<Participation> participation = participationRepository
+                .findByUserIdAndActivityId(currentUser.getId(), a.getId());
+        boolean joinedByCurrentUser = participation
+                .map(p -> p.getStatus() == Participation.Status.INSCRITO)
+                .orElse(false);
+        String currentUserRole = participation
+                .map(p -> p.getRole().name())
+                .orElse(null);
+        boolean alreadyRatedOrganizer = organizerRatingRepository
+                .existsByActivityIdAndRaterId(a.getId(), currentUser.getId());
+        boolean canRateOrganizer = canRateOrganizer(currentUser, a, participation, alreadyRatedOrganizer);
+
+        return ActivityResponse.from(
+                a,
+                joinedByCurrentUser,
+                currentUserRole,
+                canRateOrganizer,
+                alreadyRatedOrganizer
+        );
+    }
+
+    private boolean canRateOrganizer(
+            User currentUser,
+            Activity activity,
+            Optional<Participation> participation,
+            boolean alreadyRatedOrganizer
+    ) {
+        if (activity.getStatus() != ActivityStatus.FINISHED) return false;
+        if (activity.getOrganizer().getId().equals(currentUser.getId())) return false;
+        if (alreadyRatedOrganizer) return false;
+        return participation
+                .filter(p -> p.getRole() == Participation.Role.PARTICIPANTE)
+                .filter(p -> p.getStatus() == Participation.Status.INSCRITO)
+                .isPresent();
     }
 }

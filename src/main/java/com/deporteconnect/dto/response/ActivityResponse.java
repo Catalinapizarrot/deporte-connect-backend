@@ -33,6 +33,10 @@ public class ActivityResponse {
     private Boolean requiresReservation;
     private String description;
     private ActivityStatus status;
+    private Boolean joinedByCurrentUser;
+    private String currentUserRole;
+    private Boolean canRateOrganizer;
+    private Boolean alreadyRatedOrganizer;
 
     public static ActivityResponse from(Activity a) {
         return ActivityResponse.builder()
@@ -58,6 +62,47 @@ public class ActivityResponse {
                 .requiresReservation(a.getRequiresReservation())
                 .description(a.getDescription())
                 .status(a.getStatus())
+                .joinedByCurrentUser(false)
+                .currentUserRole(null)
+                .canRateOrganizer(false)
+                .alreadyRatedOrganizer(false)
+                .build();
+    }
+
+    public static ActivityResponse from(
+            Activity a,
+            Boolean joinedByCurrentUser,
+            String currentUserRole,
+            Boolean canRateOrganizer,
+            Boolean alreadyRatedOrganizer
+    ) {
+        return ActivityResponse.builder()
+                .id(a.getId())
+                .title(a.getTitle())
+                .sport(SportResponse.from(a.getSport()))
+                .location(LocationResponse.from(a.getLocation()))
+                .organizerId(a.getOrganizer().getId())
+                .organizerName(a.getOrganizer().getFullName())
+                .organizerVerified(isOrganizerVerified(a))
+                .organizerRating(a.getOrganizer().getOrganizerRating() == null
+                        ? BigDecimal.ZERO
+                        : a.getOrganizer().getOrganizerRating())
+                .organizerRatingCount(a.getOrganizer().getOrganizerRatingCount() == null
+                        ? 0
+                        : a.getOrganizer().getOrganizerRatingCount())
+                .eventAt(a.getEventAt())
+                .maxParticipants(a.getMaxParticipants())
+                .currentParticipants(a.getCurrentParticipants())
+                .price(a.getPrice() == null ? BigDecimal.ZERO : a.getPrice())
+                .level(a.getLevel())
+                .gender(a.getGender())
+                .requiresReservation(a.getRequiresReservation())
+                .description(a.getDescription())
+                .status(a.getStatus())
+                .joinedByCurrentUser(Boolean.TRUE.equals(joinedByCurrentUser))
+                .currentUserRole(currentUserRole)
+                .canRateOrganizer(Boolean.TRUE.equals(canRateOrganizer))
+                .alreadyRatedOrganizer(Boolean.TRUE.equals(alreadyRatedOrganizer))
                 .build();
     }
 
